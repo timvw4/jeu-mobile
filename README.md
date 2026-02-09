@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GeoQuest — Apprendre la géographie en jouant
 
-## Getting Started
+Application Next.js (App Router) mobile-first en TypeScript + Tailwind. Deux modes : Mode Libre et Mode Progression, avec carte SVG interactive et système de rangs.
 
-First, run the development server:
+## Installation
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Puis ouvrir http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `app/page.tsx` : accueil avec CTA vers les deux modes et aperçu carte.
+- `app/libre/page.tsx` : Mode Libre (thème pays/capitales/drapeaux, zone monde ou continent, questions infinies, feedback immédiat).
+- `app/progression/page.tsx` : Mode Progression (niveaux de 10 questions, chrono sur niveaux avancés, déblocage si ≥7/10, rangs).
+- `context/GameContext.tsx` : état global (progression, rang, couleurs carte).
+- `data/countries.ts` + `data/world-geo.json` : jeu de données géographiques + géométries simplifiées.
+- `lib/levels.ts`, `lib/questions.ts`, `lib/rank.ts` : logique de niveaux, génération de questions, calcul du rang.
+- `components/WorldMap.tsx` + `MapLegend.tsx` : carte interactive et légende.
+- `components/ui/*` : boutons, badge, barre de progression.
 
-## Learn More
+## Jeux et règles
 
-To learn more about Next.js, take a look at the following resources:
+- Mode Libre : aucune limite, chaque réponse colore la carte (non vu / en cours / réussi / erreur) et affiche une explication courte.
+- Mode Progression : 5 niveaux croissants, 10 questions chacun. Chrono sur niveaux 3 et 5. Score ≥7/10 pour débloquer le suivant. Pièges via options proches.
+- Rangs : Explorateur → Voyageur → Géographe → Cartographe → Expert mondial selon niveaux complétés et moyenne des meilleurs scores.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes techniques
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Pas de backend : tout en local dans React.
+- Données minimales pour démo (pays, capitale, continent, ISO, drapeau + fait marquant).
+- Carte SVG simplifiée projetée avec d3-geo, entièrement cliquable.
