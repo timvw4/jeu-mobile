@@ -1,19 +1,25 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { feature } from "topojson-client";
 import {
   geoEquirectangular,
   geoPath,
   type GeoPermissibleObjects,
 } from "d3-geo";
-import { FeatureCollection, Feature } from "geojson";
 import { useGame } from "@/context/GameContext";
 import { countries } from "@/data/countries";
 import { MapStatus } from "@/lib/types";
 import worldData from "world-atlas/countries-50m.json";
 import * as isoCountries from "i18n-iso-countries";
 import enLocale from "i18n-iso-countries/langs/en.json";
+import { feature } from "topojson-client";
+import type {
+  FeatureCollection,
+  Geometry,
+  GeoJsonProperties,
+  Feature as GeoFeature,
+} from "geojson";
+import type { Topology } from "topojson-specification";
 
 isoCountries.registerLocale(enLocale);
 
@@ -29,6 +35,13 @@ const statusColor: Record<MapStatus, string> = {
   "en-cours": "#fbbf24",
   reussi: "#22c55e",
   erreur: "#ef4444",
+};
+
+type CountryProps = GeoJsonProperties & {
+  iso_a2?: string;
+  iso_a3?: string;
+  iso_n3?: string;
+  name?: string;
 };
 
 export default function WorldMap({
@@ -53,11 +66,11 @@ export default function WorldMap({
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const { collection, projection } = useMemo(() => {
-    const topo = worldData as {
-      type: "Topology";
-      objects: { countries: object };
-    };
-    const fc = feature(topo, topo.objects.countries) as FeatureCollection;
+    const topo = worldData as unknown as Topology;
+    const fc = feature(
+      topo as unknown as Topology,
+      (topo as unknown as Topology).objects.countries
+    ) as FeatureCollection<Geometry, CountryProps>;
     const proj = geoEquirectangular().fitSize(
       [900, 450],
       fc as unknown as GeoPermissibleObjects
@@ -68,7 +81,9 @@ export default function WorldMap({
   const path = useMemo(() => geoPath(projection), [projection]);
 
   const vaticanCentroid = useMemo(() => {
-    const match = collection.features.find((f) => normalizeIso(f) === "VA");
+    const match = collection.features.find((f) =>
+      normalizeIso(f as GeoFeature<Geometry, CountryProps>) === "VA"
+    );
     if (!match) return null;
     const centroid = path.centroid(match as unknown as GeoPermissibleObjects);
     if (
@@ -198,7 +213,7 @@ export default function WorldMap({
             height={3000}
             fill="url(#sea)"
           />
-          {collection.features.map((feature: Feature, idx) => {
+          {collection.features.map((feature: GeoFeature<Geometry, CountryProps>, idx) => {
             const isoRaw = normalizeIso(feature);
             const iso = isoRaw || `feature-${idx}`;
             return (
@@ -267,12 +282,7 @@ export default function WorldMap({
   );
 }
 
-function normalizeIso(
-  feature: Feature & {
-    id?: string | number;
-    properties?: { iso_a2?: string; iso_a3?: string; iso_n3?: string; name?: string };
-  }
-) {
+function normalizeIso(feature: GeoFeature<Geometry, CountryProps>) {
   const props = feature.properties ?? {};
   // 1) ISO alpha-2 direct
   const iso2 = cleanIso(props.iso_a2);
