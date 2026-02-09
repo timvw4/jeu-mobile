@@ -1,4 +1,4 @@
-# GeoQuest — Apprendre la géographie en jouant
+# Geoloulou — Apprendre la géographie en jouant
 
 Application Next.js (App Router) mobile-first en TypeScript + Tailwind. Deux modes : Mode Libre et Mode Progression, avec carte SVG interactive et système de rangs.
 
