@@ -153,6 +153,8 @@ export function generateLevelQuestions(levelId: number, domain: Domain): Questio
 
   const questions: Question[] = [];
   let lastType: QuestionType | null = null;
+   // Évite de reposer la même question (même pays cible) dans un niveau
+  const usedIso = new Set<string>();
 
   for (let i = 0; i < 10; i++) {
     let qType = seq[i % seq.length] ?? level.allowedTypes[0];
@@ -160,7 +162,8 @@ export function generateLevelQuestions(levelId: number, domain: Domain): Questio
       const alternative = level.allowedTypes.find((t) => t !== lastType);
       qType = alternative ?? qType;
     }
-    const target = pickRandom(pool) as Country;
+    const target = pickUniqueTarget(pool, usedIso);
+    usedIso.add(target.iso);
     questions.push(makeQuestion(qType, target, pool, !!level.traps));
     lastType = qType;
   }
@@ -169,4 +172,11 @@ export function generateLevelQuestions(levelId: number, domain: Domain): Questio
 
 function shuffle<T>(arr: T[]): T[] {
   return [...arr].sort(() => Math.random() - 0.5);
+}
+
+function pickUniqueTarget(pool: Country[], usedIso: Set<string>): Country {
+  // essai prioritaire sur les non-utilisés, sinon fallback pour éviter blocage si pool trop petit
+  const unused = pool.filter((c) => !usedIso.has(c.iso));
+  const source = unused.length > 0 ? unused : pool;
+  return pickRandom(source) as Country;
 }

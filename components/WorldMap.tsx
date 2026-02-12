@@ -76,6 +76,11 @@ export default function WorldMap({
     initialZoom: number;
     modelCenter: { x: number; y: number };
   } | null>(null);
+  const touchStateRef = useRef<{ active: boolean; moved: boolean }>({
+    active: false,
+    moved: false,
+  });
+  const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const { collection, projection } = useMemo(() => {
     const topo = worldData as unknown as Topology;
@@ -109,6 +114,13 @@ export default function WorldMap({
   }, [collection.features, path]);
 
   const handleClick = (iso: string) => {
+    // Sur mobile, on bloque les clics issus d'un drag/pinch
+    if (
+      isMobile &&
+      (touchStateRef.current.active || touchStateRef.current.moved || pinchRef.current)
+    ) {
+      return;
+    }
     const match = collection.features.find((f) => normalizeIso(f) === iso);
     const countryData = countries.find((c) => c.iso === iso);
     if (match) {
@@ -123,6 +135,8 @@ export default function WorldMap({
       });
     }
     if (onSelect) onSelect(iso);
+    // Réinitialise le flag "moved" après un vrai tap
+    touchStateRef.current.moved = false;
   };
 
   const pickColor = (iso: string) => {
@@ -260,10 +274,13 @@ export default function WorldMap({
               initialZoom: zoom,
               modelCenter: { x: modelX, y: modelY },
             };
+            touchStateRef.current = { active: true, moved: true };
             setDragging(false);
           } else if (e.touches.length === 1) {
             e.preventDefault();
             const t = e.touches[0];
+            touchStateRef.current = { active: true, moved: false };
+            touchStartRef.current = { x: t.clientX, y: t.clientY };
             setDragging(true);
             setStart({ x: t.clientX - offset.x, y: t.clientY - offset.y });
             updateFocusFromEvent(t.clientX, t.clientY);
@@ -285,23 +302,31 @@ export default function WorldMap({
             const offsetY = centerY - rect.top - model.y * desiredZoom;
             setZoom(desiredZoom);
             setOffset({ x: offsetX, y: offsetY });
+            touchStateRef.current.moved = true;
           } else if (e.touches.length === 1) {
             e.preventDefault();
             const t = e.touches[0];
             updateFocusFromEvent(t.clientX, t.clientY);
             if (!dragging) return;
             setOffset({ x: t.clientX - start.x, y: t.clientY - start.y });
+            const dx = t.clientX - touchStartRef.current.x;
+            const dy = t.clientY - touchStartRef.current.y;
+            if (Math.hypot(dx, dy) > 6) {
+              touchStateRef.current.moved = true;
+            }
           }
         }}
         onTouchEnd={(e) => {
           pinchRef.current = null;
           if (e.touches.length === 0) {
             setDragging(false);
+            touchStateRef.current.active = false;
           }
         }}
         onTouchCancel={() => {
           pinchRef.current = null;
           setDragging(false);
+          touchStateRef.current = { active: false, moved: false };
         }}
       >
         <defs>

@@ -112,6 +112,8 @@ export default function ProgressionPage() {
     }));
   }, [currentQuestion]);
 
+  const progressValue = step === "ended" ? 10 : currentIndex;
+
   return (
     <main className="min-h-screen px-5 py-8 md:px-10 flex flex-col gap-6">
       <header className="flex flex-col gap-2">
@@ -231,7 +233,7 @@ export default function ProgressionPage() {
           <div>
             <p className="text-xs text-slate-400">Niveau sélectionné</p>
             <h2 className="text-xl font-semibold">
-              {active.title} — {active.description}
+              Niveau {active.id} — {active.title}
             </h2>
           </div>
           <Button
@@ -243,7 +245,7 @@ export default function ProgressionPage() {
           </Button>
         </div>
 
-        <ProgressBar value={currentIndex} max={10} />
+        <ProgressBar value={progressValue} max={10} />
         {active.timer && step === "running" && (
           <p className="text-sm text-amber-200">
             Temps restant : {timer ?? active.timer}s
