@@ -27,9 +27,20 @@ Puis ouvrir http://localhost:3000
 - Mode Libre : aucune limite, chaque réponse colore la carte (non vu / en cours / réussi / erreur) et affiche une explication courte.
 - Mode Progression : 5 niveaux croissants, 10 questions chacun. Chrono sur niveaux 3 et 5. Score ≥7/10 pour débloquer le suivant. Pièges via options proches.
 - Rangs : Explorateur → Voyageur → Géographe → Cartographe → Expert mondial selon niveaux complétés et moyenne des meilleurs scores.
+- Auth Supabase : compte email + mot de passe, email vérifié, pseudo unique. Progression sauvegardée en fin de niveau.
 
 ## Notes techniques
 
 - Pas de backend : tout en local dans React.
 - Données minimales pour démo (pays, capitale, continent, ISO, drapeau + fait marquant).
 - Carte SVG simplifiée projetée avec d3-geo, entièrement cliquable.
+
+## Supabase (auth + progression)
+
+1. Crée un projet Supabase et renseigne dans `.env.local` (non commité) :
+   - `NEXT_PUBLIC_SUPABASE_URL=...`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY=...`
+2. Tables (exemple SQL) :
+   - `profiles(id uuid primary key references auth.users, email text, pseudo text unique, created_at timestamptz default now())`
+   - `progress(id uuid primary key default gen_random_uuid(), user_id uuid references auth.users, domain text, level int, score int, updated_at timestamptz default now())`
+3. Active RLS pour autoriser lecture/écriture à l'utilisateur propriétaire (policy sur `user_id = auth.uid()`).

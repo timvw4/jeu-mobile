@@ -1,9 +1,11 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { levelsByDomain } from "@/lib/levels";
 import { computeRank, Rank } from "@/lib/rank";
 import { Domain, LevelProgress, MapStatus } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabaseClient";
 
 type GameContextType = {
   levelProgress: LevelProgress[];
@@ -28,6 +30,7 @@ const initialProgress: LevelProgress[] = levelsByDomain.map((level, index) => ({
 }));
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [levelProgress, setLevelProgress] =
     useState<LevelProgress[]>(initialProgress);
   const [mapStates, setMapStates] = useState<Record<string, MapStatus>>({});
@@ -53,6 +56,68 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   );
 
   const rank = useMemo(() => computeRank(levelProgress), [levelProgress]);
+
+  const buildProgressFromRemote = (rows: { domain: Domain; level: number; score: number }[]) => {
+    const base = initialProgress.map((lvl) => ({ ...lvl }));
+    rows.forEach((row) => {
+      const idx = base.findIndex(
+        (l) => l.domain === row.domain && l.levelId === row.level
+      );
+      if (idx !== -1) {
+        base[idx] = {
+          ...base[idx],
+          bestScore: row.score,
+          lastScore: row.score,
+          completed: row.score >= 7 || base[idx].completed,
+        };
+      }
+    });
+    // Déverrouille les niveaux suivants par domaine en fonction des scores
+    const domains: Domain[] = ["Monde", "Europe", "Afrique", "Asie", "Amériques", "Océanie"];
+    domains.forEach((d) => {
+      const byDomain = base
+        .filter((l) => l.domain === d)
+        .sort((a, b) => a.levelId - b.levelId);
+      byDomain.forEach((lvl, i) => {
+        if (i === 0) return;
+        const prev = byDomain[i - 1];
+        if (prev.completed || prev.bestScore >= 7) {
+          const idxGlobal = base.findIndex(
+            (l) => l.levelId === lvl.levelId && l.domain === lvl.domain
+          );
+          if (idxGlobal !== -1) {
+            base[idxGlobal] = { ...base[idxGlobal], unlocked: true };
+          }
+        }
+      });
+    });
+    return base;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!user) {
+        if (!cancelled) setLevelProgress(initialProgress);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("progress")
+        .select("domain, level, score")
+        .eq("user_id", user.id);
+      if (error) {
+        console.error("Erreur chargement progression", error);
+        return;
+      }
+      if (cancelled) return;
+      const merged = buildProgressFromRemote(data ?? []);
+      setLevelProgress(merged);
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const updateMapState = (iso: string, status: MapStatus) => {
     setMapStates((prev) => ({
@@ -90,6 +155,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       }
       return updated;
     });
+
+    // Sauvegarde distante si connecté et email confirmé
+    if (user) {
+      supabase
+        .from("progress")
+        .upsert({
+          user_id: user.id,
+          domain,
+          level: levelId,
+          score,
+          updated_at: new Date().toISOString(),
+        })
+        .then(({ error }) => {
+          if (error) console.error("Erreur sauvegarde progression", error);
+        });
+    }
   };
 
   const resetLevel = (domain: Domain, levelId: number) => {

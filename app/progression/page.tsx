@@ -9,12 +9,14 @@ import { generateLevelQuestions } from "@/lib/questions";
 import { Domain, Question } from "@/lib/types";
 import { countries } from "@/data/countries";
 import { useGame } from "@/context/GameContext";
+import { useAuth } from "@/context/AuthContext";
 
 type StepState = "idle" | "running" | "ended";
 
 export default function ProgressionPage() {
   const { levelProgress, updateMapState, completeLevel, rank, domainScores, totalScore } =
     useGame();
+  const { user, profile } = useAuth();
   const [selectedDomain, setSelectedDomain] = useState<Domain>("Monde");
   const [selectedLevel, setSelectedLevel] = useState<number>(1);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -29,6 +31,7 @@ export default function ProgressionPage() {
     (l) => l.levelId === selectedLevel && l.domain === selectedDomain
   ) || { levelId: selectedLevel, domain: selectedDomain, unlocked: true, completed: false, bestScore: 0, lastScore: 0 };
   const currentQuestion = questions[currentIndex];
+  const authLocked = !user;
 
   const startLevel = () => {
     const qs = generateLevelQuestions(selectedLevel, selectedDomain);
@@ -114,14 +117,23 @@ export default function ProgressionPage() {
       <header className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <Button
-            asLink="/"
+            asLink="/modes"
             variant="ghost"
             className="!w-10 !h-10 rounded-full p-0 flex items-center justify-center"
-            aria-label="Retour à l'accueil"
+            aria-label="Retour au choix des modes"
           >
             ←
           </Button>
-          <p className="text-sm text-slate-300">Mode Progression</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-slate-300">Mode Progression</p>
+            <Button
+              asLink="/auth"
+              variant="ghost"
+              className="!w-auto !h-10 !px-4 !py-2 rounded-xl"
+            >
+              {user ? profile.pseudo ?? "Profil" : "Compte"}
+            </Button>
+          </div>
         </div>
         <h1 className="text-3xl font-bold">Gravis les niveaux</h1>
         <p className="text-slate-200">
@@ -136,6 +148,11 @@ export default function ProgressionPage() {
             Rang : {rank}
           </span>
         </div>
+        {authLocked && (
+          <div className="mt-2 rounded-xl bg-amber-500/15 border border-amber-400/40 px-3 py-2 text-sm text-amber-100">
+            Connecte-toi pour lancer les niveaux et sauvegarder ta progression.
+          </div>
+        )}
         <div className="border-b border-white/10 my-2" />
         <div className="flex flex-wrap gap-2 mt-2">
           {domains.map((d) => (
@@ -219,7 +236,7 @@ export default function ProgressionPage() {
           </div>
           <Button
             onClick={startLevel}
-            disabled={!progress.unlocked}
+            disabled={!progress.unlocked || authLocked}
             className="w-fit"
           >
             {step === "running" ? "Recommencer" : "Lancer"}

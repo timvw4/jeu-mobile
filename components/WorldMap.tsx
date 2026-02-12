@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   geoEquirectangular,
   geoPath,
@@ -28,6 +28,9 @@ type Props = {
   onSelect?: (iso: string) => void;
   height?: number;
   showDetails?: boolean;
+  focusIso?: string | null;
+  resetKey?: number;
+  useStatuses?: boolean; // affiche les couleurs de statut (non-vu, en-cours, etc.)
 };
 
 const statusColor: Record<MapStatus, string> = {
@@ -49,6 +52,9 @@ export default function WorldMap({
   onSelect,
   height = 260,
   showDetails = true,
+  focusIso = null,
+  resetKey = 0,
+  useStatuses = true,
 }: Props) {
   const { mapStates } = useGame();
   const [hoverIso, setHoverIso] = useState<string | null>(null);
@@ -114,6 +120,7 @@ export default function WorldMap({
   };
 
   const pickColor = (iso: string) => {
+    if (!useStatuses) return "#94a3b8"; // gris uniforme (désactive les indices)
     const state = mapStates[iso];
     if (iso === targetIso) return statusColor["en-cours"];
     return statusColor[state ?? "non-vu"];
@@ -126,6 +133,43 @@ export default function WorldMap({
     const modelY = (clientY - rect.top - offset.y) / zoom;
     focusRef.current = { x: modelX, y: modelY };
   };
+
+  // Remet la vue par défaut quand resetKey change (nouvelle question)
+  useEffect(() => {
+    setZoom(1.1);
+    setOffset({ x: 0, y: 0 });
+    setSelected(null);
+  }, [resetKey]);
+
+  // Centre et zoome sur le pays demandé (par exemple après une mauvaise réponse)
+  useEffect(() => {
+    if (!focusIso) return;
+    const match = collection.features.find(
+      (f) => normalizeIso(f as GeoFeature<Geometry, CountryProps>) === focusIso
+    );
+    if (!match) return;
+
+    const centroid = path.centroid(match as unknown as GeoPermissibleObjects);
+    const bounds = path.bounds(match as unknown as GeoPermissibleObjects);
+    const dx = Math.max(bounds[1][0] - bounds[0][0], 1);
+    const dy = Math.max(bounds[1][1] - bounds[0][1], 1);
+
+    // Calcul d'un zoom adapté avec un peu de marge
+    const padding = 1.4;
+    const zoomFromWidth = 900 / (dx * padding);
+    const zoomFromHeight = 450 / (dy * padding);
+    const desired = Math.min(zoomFromWidth, zoomFromHeight);
+    const clampedZoom = Math.max(1.5, Math.min(desired, 12));
+
+    // 1) Fixe le zoom souhaité
+    setZoom(clampedZoom);
+    // 2) Calcule l'offset pour que le centroid tombe au centre
+    //    Ordre CSS: scale puis translate, avec transformOrigin (450,225).
+    //    Formule: offset = zoom * (centre - centroid)
+    const offsetX = clampedZoom * (450 - centroid[0]);
+    const offsetY = clampedZoom * (225 - centroid[1]);
+    setOffset({ x: offsetX, y: offsetY });
+  }, [focusIso, collection.features, path]);
 
   return (
     <div className="w-full">
@@ -216,16 +260,19 @@ export default function WorldMap({
           {collection.features.map((feature: GeoFeature<Geometry, CountryProps>, idx) => {
             const isoRaw = normalizeIso(feature);
             const iso = isoRaw || `feature-${idx}`;
+            const isFocused = focusIso && iso === focusIso;
             return (
               <path
                 key={iso}
                 d={path(feature as unknown as GeoPermissibleObjects) || ""}
                 fill={pickColor(iso)}
-                stroke="#0b172f"
-                strokeWidth={0.4}
+                stroke={isFocused ? "#22c55e" : "#0b172f"}
+                strokeWidth={isFocused ? 1.2 : 0.4}
                 vectorEffect="non-scaling-stroke"
                 strokeLinecap="round"
-                className="transition-all duration-150 cursor-pointer hover:opacity-80"
+                className={`transition-all duration-150 cursor-pointer hover:opacity-80 ${
+                  isFocused ? "shadow-[0_0_0_2px_rgba(34,197,94,0.6)]" : ""
+                }`}
                 onMouseEnter={() => setHoverIso(iso)}
                 onMouseLeave={() => setHoverIso(null)}
                 onClick={() => handleClick(iso)}

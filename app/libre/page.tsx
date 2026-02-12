@@ -1,12 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Button from "@/components/ui/Button";
 import WorldMap from "@/components/WorldMap";
 import { countries, continents } from "@/data/countries";
 import { generateQuestion } from "@/lib/questions";
 import { Question, QuestionType, Theme, Zone } from "@/lib/types";
 import { useGame } from "@/context/GameContext";
+import { useAuth } from "@/context/AuthContext";
 
 const themes: Theme[] = ["pays", "capitales", "drapeaux"];
 
@@ -14,10 +22,14 @@ export default function LibrePage() {
   const [theme, setTheme] = useState<Theme>("pays");
   const [zone, setZone] = useState<Zone>("Monde");
   const [question, setQuestion] = useState<Question | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<ReactNode | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [focusIso, setFocusIso] = useState<string | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const { updateMapState } = useGame();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const { user, profile } = useAuth();
 
   const pickType = useCallback(
     (prev?: QuestionType): QuestionType => {
@@ -43,6 +55,9 @@ export default function LibrePage() {
       setQuestion(next);
       setFeedback(null);
       setIsCorrect(null);
+      setFocusIso(null);
+      setSelectedOption(null);
+      setResetKey((k) => k + 1);
       updateMapState(next.correctIso, "en-cours");
     },
     [pickType, zone, updateMapState]
@@ -59,15 +74,23 @@ export default function LibrePage() {
     if (question.type === "trueFalse" && typeof iso === "boolean") {
       good = iso === question.isTrueAnswer;
     } else if (typeof iso === "string") {
+      setSelectedOption(iso);
       good = iso === question.correctIso;
     }
     setIsCorrect(good);
+    // Si mauvaise réponse, on focalise la carte sur le bon pays
+    setFocusIso(good ? null : question.correctIso);
     const country = countries.find((c) => c.iso === question.correctIso);
     const fact = question.explanation;
+    const answerText = `${country?.name ?? question.correctIso}. ${fact}`;
     setFeedback(
-      good
-        ? `Bravo ! ${fact}`
-        : `Mauvaise réponse, la bonne était ${country?.name ?? question.correctIso}. ${fact}`
+      good ? (
+        <>Bravo ! {fact}</>
+      ) : (
+        <>
+          Mauvaise réponse, la bonne était <strong>{answerText}</strong>
+        </>
+      )
     );
     updateMapState(question.correctIso, good ? "reussi" : "erreur");
 
@@ -116,14 +139,23 @@ export default function LibrePage() {
       <header className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <Button
-            asLink="/"
+            asLink="/modes"
             variant="ghost"
             className="!w-10 !h-10 rounded-full p-0 flex items-center justify-center"
-            aria-label="Retour à l'accueil"
+            aria-label="Retour au choix des modes"
           >
             ←
           </Button>
-          <p className="text-sm text-slate-300">Mode Libre</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-slate-300">Mode Libre</p>
+            <Button
+              asLink="/auth"
+              variant="ghost"
+              className="!w-auto !h-10 !px-4 !py-2 rounded-xl"
+            >
+              {user ? profile.pseudo ?? "Profil" : "Compte"}
+            </Button>
+          </div>
         </div>
         <h1 className="text-3xl font-bold">Entraîne-toi sans limite</h1>
         <p className="text-slate-200">
@@ -131,37 +163,47 @@ export default function LibrePage() {
         </p>
       </header>
 
-      <section className="card rounded-3xl p-4 flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex gap-2">
-            {themes.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTheme(t)}
-                className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                  theme === t
-                    ? "bg-cyan-500 text-white"
-                    : "bg-white/5 text-slate-200"
-                }`}
-              >
-                {t === "pays" && "Pays"}
-                {t === "capitales" && "Capitales"}
-                {t === "drapeaux" && "Drapeaux"}
-              </button>
-            ))}
+      <section className="card rounded-3xl p-4 flex flex-col gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-slate-400 uppercase">Thème</p>
+            <div className="flex gap-2">
+              {themes.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTheme(t)}
+                  className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                    theme === t
+                      ? "bg-cyan-500 text-white"
+                      : "bg-white/5 text-slate-200"
+                  }`}
+                >
+                  {t === "pays" && "Pays"}
+                  {t === "capitales" && "Capitales"}
+                  {t === "drapeaux" && "Drapeaux"}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-2 overflow-x-auto">
-            {["Monde", ...continents].map((z) => (
-              <button
-                key={z}
-                onClick={() => setZone(z as Zone)}
-                className={`flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                  zone === z ? "bg-blue-500 text-white" : "bg-white/5 text-slate-200"
-                }`}
+
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-slate-400 uppercase">Zone</p>
+            <div className="relative">
+              <select
+                value={zone}
+                onChange={(e) => setZone(e.target.value as Zone)}
+                className="w-full appearance-none rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm font-semibold text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {z}
-              </button>
-            ))}
+                {["Monde", ...continents].map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-300">
+                ▼
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -201,7 +243,13 @@ export default function LibrePage() {
                   <button
                     key={iso}
                     onClick={() => handleChoice(iso)}
-                    className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 hover:bg-white/10 transition text-xl sm:text-2xl flex items-center justify-center"
+                    className={`rounded-2xl px-4 py-3 transition text-xl sm:text-2xl flex items-center justify-center border ${
+                      isCorrect !== null && iso === question.correctIso
+                        ? "border-emerald-500 bg-emerald-500/15 text-white"
+                        : isCorrect === false && selectedOption === iso
+                        ? "border-rose-500 bg-rose-500/15 text-white"
+                        : "border-white/10 bg-white/5 hover:bg-white/10"
+                    }`}
                   >
                     {renderOptionLabel(iso)}
                   </button>
@@ -232,6 +280,9 @@ export default function LibrePage() {
                   targetIso={question.correctIso}
                   onSelect={(iso) => handleChoice(iso)}
                   height={260}
+                  focusIso={focusIso}
+                  resetKey={resetKey}
+                  useStatuses={false}
                 />
               </div>
             )}
